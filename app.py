@@ -5,6 +5,8 @@ from langchain.chains import RetrievalQA
 from langchain.llms import OpenAI
 from langchain.vectorstores import Qdrant
 from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.text_splitter import CharacterTextSplitter
+
 import qdrant_client
 import os
 
@@ -23,7 +25,18 @@ def get_vector_store():
         embeddings=embeddings,
     )
     
-    return vector_store
+    return client, vector_store
+
+
+def get_chunks(text):
+    text_splitter = CharacterTextSplitter(
+        separator="\n",
+        chunk_size=1000,
+        chunk_overlap=200,
+        length_function=len
+    )
+    chunks = text_splitter.split_text(text)
+    return chunks
 
 def main():
     load_dotenv()
@@ -32,7 +45,18 @@ def main():
     st.header("Ask your remote database 💬")
     
     # create vector store
-    vector_store = get_vector_store()
+    client, vector_store = get_vector_store()
+    
+    # get vector_store info
+    info = client.get_collection(collection_name=os.getenv("QDRANT_COLLECTION_NAME"))
+    
+    if info.vectors_count == 0:
+        print("vectors count:", info.vectors_count)
+        # do embed
+        with open("the-kreutzer-sonana.txt") as f:
+            raw_text = f.read()
+            texts = get_chunks(raw_text)
+            vector_store.add_texts(texts)
     
     # create chain 
     qa = RetrievalQA.from_chain_type(
